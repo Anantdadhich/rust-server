@@ -1,0 +1,14 @@
+[package]
+name = "solana-axum"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8.4"
+serde = "1.0.219"
+serde_json = "1.0.140"
+solana-sdk = "1.18.0"
+solana-client = "1.18.0"
+tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread"] }
+anyhow = "1.0.98"
+tower-http = { version = "0.6.6", features = ["full"] }

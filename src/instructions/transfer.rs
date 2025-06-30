@@ -1,49 +1,38 @@
-use anyhow::Result;
-use axum::response::IntoResponse;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{
-    commitment_config::CommitmentConfig, native_token::LAMPORTS_PER_SOL, signature::Signer,
-    signer::keypair::Keypair, system_instruction, transaction::Transaction,
-};
+use std::str::FromStr;
 
-#[tokio::main] 
- pub async  fn transfer()->Result<()>{
+use axum::Json;
+use serde::{Deserialize, Serialize};
+use solana_sdk::system_instruction;
+use solana_program::pubkey::Pubkey;
+use base64;
+use crate::model::response::ApiResponse;
 
+#[derive(Deserialize)]
+pub struct SendSolRequest {
+    pub from: String,
+    pub to: String,
+    pub lamports: u64,
+}
 
-    let client=RpcClient::new("https://api.devnet.solana.com".to_string());
+#[derive(Serialize)]
+pub struct SendSolResponse {
+    pub program_id: String,
+    pub accounts: Vec<String>,
+    pub instruction_data: String,
+}
 
-    let sender=Keypair::new();
-    let recipient=Keypair::new();
+pub async fn transfer_sol(Json(req): Json<SendSolRequest>) -> Json<ApiResponse<SendSolResponse>> {
+    let from = Pubkey::from_str(&req.from).unwrap();
+    let to = Pubkey::from_str(&req.to).unwrap();
 
-    let airdrop_sig=client.request_airdrop(&sender.pubkey(), LAMPORTS_PER_SOL).await?; 
+    let ix = system_instruction::transfer(&from, &to, req.lamports);
 
-    loop {
-        let confirm=client.confirm_transaction(&airdrop_sig).await?;
-        if confirm{
-            break;
-        }
-    }
-    //let check balance before transfer
-    let sender_balance=client.get_balance(&sender.pubkey()).await?; 
-    let recipient_balance=client.get_balance(&recipient.pubkey()).await?;
+    let accounts = ix.accounts.iter().map(|meta| meta.pubkey.to_string()).collect();
+    let instruction_data = base64::encode(ix.data);
 
-    let transfer_amount=LAMPORTS_PER_SOL/100;
-
-    let transfer_instruction=system_instruction::transfer(&sender.pubkey(), &recipient.pubkey(), transfer_amount) ;
-     
-
-     let mut transaction=Transaction::new_with_payer(&[transfer_instruction], Some(&sender.pubkey()));
-
-
-     let blockhash=client.get_latest_blockhash().await?;
-
-     transaction.sign(&[&sender], blockhash);
-
-     let transaction_sig=client.send_and_confirm_transaction(&transaction).await?;
-
-     println!("Transaction done{:#?}",transaction_sig);
-
-     
-    Ok(())
-
+    Json(ApiResponse::success(SendSolResponse {
+        program_id: ix.program_id.to_string(),
+        accounts,
+        instruction_data,
+    }))
 }

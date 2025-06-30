@@ -1,78 +1,37 @@
-/*use solana_sdk::signer::{keypair::Keypair, Signer};
-use solana_sdk::pubkey;  //macro key 
-use solana_sdk::pubkey::Pubkey; 
-#[tokio::main]
+use axum::{routing::post, Router, http::Method};
+use tower_http::cors::{Any, CorsLayer};
 
-
-//macros are used for while patter matching
-
-/* async fn main() {
-    //how we generate the new account 
-
-   let keypair=Keypair::new();
-    println!("public ley {}",keypair.pubkey()); 
-    print!("Secrt {:?}",keypair.to_bytes()); 
-}
-*/
-//for building pds
-
-async fn main(){
-    let program_address=pubkey!("11111111111111111111111111111111");
-    let seeds=[b"treasury".as_ref()];
-    let (pda,bump)=Pubkey::find_program_address(&seeds, &program_address); 
-    println!("PDA {}",pda);
-     println!("bump {}",bump) ;
-
-}*/
-
-
-//lets test the axum framework 
-/* 
-use axum::{
-    routing::get,
-    Router
-}; 
-
-#[tokio::main]
-async fn main(){
-      //we use router to see which path goes to which services  
-   let app=Router::new().route("/", get(|| async {"hello world"})); 
-     
-     let listener=tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap(); 
-
-     axum::serve(listener, app).await.unwrap();
-
-}
-
-
-
-*/
-
-
-use tokio::{net::TcpListener, sync::RwLock};
-
-use axum::{http::Method, routing::{get,post}, Router}; 
-use tower_http::cors::{Any,CorsLayer};
-
-use instructions::balance::get_balance;
-use instructions::transfer::transfer;
 mod instructions;
 mod model;
 
-#[tokio::main]
-async fn main(){
-   let cors=CorsLayer::new().
-   allow_methods([Method::GET,Method::POST]).allow_headers(Any).allow_origin(Any);
 
-   let app=Router::new().route("/getbalance", get( get_balance ))
-   .layer(cors);
-   
-   
-       let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
+use instructions::{
+    transfer::transfer_sol,
+    message::{sign_message, verify_message},
+};
+
+use crate::instructions::{  createtoken::create_token, generatekeypair::generate_keypair, mint::mint_token, token::send_token};
+
+#[tokio::main]
+async fn main() {
+    let cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers(Any)
+        .allow_origin(Any);
+
+    let app = Router::new()
+        .route("/keypair", post(generate_keypair))
+        .route("/token/create", post(create_token))
+        .route("/token/mint", post(mint_token))
+        .route("/message/sign", post(sign_message))
+        .route("/message/verify", post(verify_message))
+        .route("/send/sol", post(transfer_sol))
+        .route("/send/token", post(send_token))
+        .layer(cors);
+
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000")
         .await
         .unwrap();
 
     axum::serve(listener, app).await.unwrap();
-
 }
-

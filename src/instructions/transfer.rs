@@ -1,10 +1,9 @@
 use std::str::FromStr;
-
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use solana_sdk::system_instruction;
 use solana_program::pubkey::Pubkey;
-use base64;
+use base64::{engine::general_purpose, Engine as _};
 use crate::model::response::ApiResponse;
 
 #[derive(Deserialize)]
@@ -22,13 +21,27 @@ pub struct SendSolResponse {
 }
 
 pub async fn transfer_sol(Json(req): Json<SendSolRequest>) -> Json<ApiResponse<SendSolResponse>> {
-    let from = Pubkey::from_str(&req.from).unwrap();
-    let to = Pubkey::from_str(&req.to).unwrap();
+    
+    let from = match Pubkey::from_str(&req.from) {
+        Ok(pk) => pk,
+        Err(_) => {
+            return Json(ApiResponse::error("Invalid sender public key"));
+        }
+    };
 
+    let to = match Pubkey::from_str(&req.to) {
+        Ok(pk) => pk,
+        Err(_) => {
+            return Json(ApiResponse::error("Invalid recipient public key"));
+        }
+    };
+
+    
     let ix = system_instruction::transfer(&from, &to, req.lamports);
 
-    let accounts = ix.accounts.iter().map(|meta| meta.pubkey.to_string()).collect();
-    let instruction_data = base64::encode(ix.data);
+    
+    let accounts: Vec<String> = ix.accounts.iter().map(|meta| meta.pubkey.to_string()).collect();
+    let instruction_data = general_purpose::STANDARD.encode(ix.data);
 
     Json(ApiResponse::success(SendSolResponse {
         program_id: ix.program_id.to_string(),

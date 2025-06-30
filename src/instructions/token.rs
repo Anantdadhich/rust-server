@@ -1,4 +1,5 @@
 use std::str::FromStr;
+
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use solana_program::pubkey::Pubkey;
@@ -22,6 +23,13 @@ pub struct AccountInfo {
 }
 
 #[derive(Serialize)]
+pub struct SendTokenData {
+    pub program_id: String,
+    pub accounts: Vec<AccountInfo>,
+    pub instruction_data: String,
+}
+
+#[derive(Serialize)]
 pub struct SendTokenResponse {
     pub success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -30,15 +38,7 @@ pub struct SendTokenResponse {
     pub error: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct SendTokenData {
-    pub program_id: String,
-    pub accounts: Vec<AccountInfo>,
-    pub instruction_data: String,
-}
-
 pub async fn send_token(Json(req): Json<SendTokenRequest>) -> Json<SendTokenResponse> {
-    // Validate amount
     if req.amount == 0 {
         return Json(SendTokenResponse {
             success: false,
@@ -47,72 +47,46 @@ pub async fn send_token(Json(req): Json<SendTokenRequest>) -> Json<SendTokenResp
         });
     }
 
-    // Parse and validate destination address
     let destination = match Pubkey::from_str(&req.destination) {
-        Ok(pubkey) => pubkey,
-        Err(_) => {
-            return Json(SendTokenResponse {
-                success: false,
-                data: None,
-                error: Some("Invalid destination public key".to_string()),
-            });
-        }
+        Ok(p) => p,
+        Err(_) => return error_response("Invalid destination public key"),
     };
 
-    // Parse and validate mint address
     let mint = match Pubkey::from_str(&req.mint) {
-        Ok(pubkey) => pubkey,
-        Err(_) => {
-            return Json(SendTokenResponse {
-                success: false,
-                data: None,
-                error: Some("Invalid mint public key".to_string()),
-            });
-        }
+        Ok(p) => p,
+        Err(_) => return error_response("Invalid mint public key"),
     };
 
-    // Parse and validate owner address
     let owner = match Pubkey::from_str(&req.owner) {
-        Ok(pubkey) => pubkey,
-        Err(_) => {
-            return Json(SendTokenResponse {
-                success: false,
-                data: None,
-                error: Some("Invalid owner public key".to_string()),
-            });
-        }
+        Ok(p) => p,
+        Err(_) => return error_response("Invalid owner public key"),
     };
 
-    // Get associated token accounts
+
     let source_ata = get_associated_token_address(&owner, &mint);
     let destination_ata = get_associated_token_address(&destination, &mint);
 
-    // Create the transfer instruction
     let ix = match transfer(
         &spl_token::id(),
         &source_ata,
         &destination_ata,
         &owner,
-        &[&owner], // signers
+        &[&owner],
         req.amount,
     ) {
-        Ok(instruction) => instruction,
-        Err(e) => {
-            return Json(SendTokenResponse {
-                success: false,
-                data: None,
-                error: Some(format!("Failed to create transfer instruction: {}", e)),
-            });
-        }
+        Ok(ix) => ix,
+        Err(e) => return error_response(&format!("Failed to create transfer instruction: {}", e)),
     };
 
-    // Convert account metas to response format
-    let accounts = ix.accounts.iter().map(|meta| AccountInfo {
-        pubkey: meta.pubkey.to_string(),
-        is_signer: meta.is_signer,
-    }).collect();
+    let accounts = ix
+        .accounts
+        .iter()
+        .map(|meta| AccountInfo {
+            pubkey: meta.pubkey.to_string(),
+            is_signer: meta.is_signer,
+        })
+        .collect();
 
-    // Encode instruction data
     let instruction_data = general_purpose::STANDARD.encode(&ix.data);
 
     Json(SendTokenResponse {
@@ -123,5 +97,14 @@ pub async fn send_token(Json(req): Json<SendTokenRequest>) -> Json<SendTokenResp
             instruction_data,
         }),
         error: None,
+    })
+}
+
+
+fn error_response(msg: &str) -> Json<SendTokenResponse> {
+    Json(SendTokenResponse {
+        success: false,
+        data: None,
+        error: Some(msg.to_string()),
     })
 }

@@ -49,7 +49,7 @@ pub async fn mint_token(
         });
     }
 
-    // Parse and validate mint address
+   
     let mint_pubkey = match Pubkey::from_str(&payload.mint) {
         Ok(pubkey) => pubkey,
         Err(_) => {
@@ -61,7 +61,7 @@ pub async fn mint_token(
         }
     };
 
-    // Parse and validate destination address
+    
     let destination_pubkey = match Pubkey::from_str(&payload.destination) {
         Ok(pubkey) => pubkey,
         Err(_) => {
@@ -73,7 +73,7 @@ pub async fn mint_token(
         }
     };
 
-    // Parse and validate authority address
+
     let authority_pubkey = match Pubkey::from_str(&payload.authority) {
         Ok(pubkey) => pubkey,
         Err(_) => {
@@ -85,16 +85,16 @@ pub async fn mint_token(
         }
     };
 
-    // Get the associated token account for the destination
+
     let destination_ata = get_associated_token_address(&destination_pubkey, &mint_pubkey);
 
-    // Create the mint_to instruction
+
     let ix = match mint_to(
         &spl_token::id(),
         &mint_pubkey,
         &destination_ata,
         &authority_pubkey,
-        &[&authority_pubkey], // signers
+        &[&authority_pubkey], 
         payload.amount,
     ) {
         Ok(instruction) => instruction,
@@ -107,14 +107,14 @@ pub async fn mint_token(
         }
     };
 
-    // Convert account metas to response format
+  
     let accounts = ix.accounts.iter().map(|meta| AccountInfo {
         pubkey: meta.pubkey.to_string(),
         is_signer: meta.is_signer,
         is_writable: meta.is_writable,
     }).collect();
 
-    // Encode instruction data
+
     let instruction_data = general_purpose::STANDARD.encode(&ix.data);
 
     Json(MintTokenResponse {

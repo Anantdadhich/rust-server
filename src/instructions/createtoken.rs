@@ -1,13 +1,8 @@
 use std::str::FromStr;
 use axum::Json;
 use serde::{Deserialize, Serialize};
-use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
-    system_program,
-    sysvar::rent,
-};
-// Use the correct Pubkey type from solana-program
 use solana_program::pubkey::Pubkey;
+use solana_sdk::instruction::Instruction;
 use spl_token::instruction::initialize_mint;
 use base64::{engine::general_purpose, Engine as _};
 
@@ -17,6 +12,10 @@ pub struct CreateTokenRequest {
     pub mint_authority: String,
     pub mint: String,
     pub decimals: u8,
+
+    
+    #[serde(default)]
+    pub token_name: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -24,6 +23,14 @@ pub struct AccountInfo {
     pub pubkey: String,
     pub is_signer: bool,
     pub is_writable: bool,
+}
+
+#[derive(Serialize)]
+pub struct CreateTokenData {
+    pub program_id: String,
+    pub accounts: Vec<AccountInfo>,
+    pub instruction_data: String,
+    pub token_name: Option<String>, 
 }
 
 #[derive(Serialize)]
@@ -35,19 +42,10 @@ pub struct CreateTokenResponse {
     pub error: Option<String>,
 }
 
-#[derive(Serialize)]
-pub struct CreateTokenData {
-    pub program_id: String,
-    pub accounts: Vec<AccountInfo>,
-    pub instruction_data: String,
-}
-
- pub async fn create_token(
-    Json(payload): Json<CreateTokenRequest>,
-) -> Json<CreateTokenResponse> {
-    // Validate and parse public keys
+pub async fn create_token(Json(payload): Json<CreateTokenRequest>) -> Json<CreateTokenResponse> {
+   
     let mint_pubkey = match Pubkey::from_str(&payload.mint) {
-        Ok(pubkey) => pubkey,
+        Ok(p) => p,
         Err(_) => {
             return Json(CreateTokenResponse {
                 success: false,
@@ -57,8 +55,8 @@ pub struct CreateTokenData {
         }
     };
 
-    let mint_authority_pubkey = match Pubkey::from_str(&payload.mint_authority) {
-        Ok(pubkey) => pubkey,
+    let authority_pubkey = match Pubkey::from_str(&payload.mint_authority) {
+        Ok(p) => p,
         Err(_) => {
             return Json(CreateTokenResponse {
                 success: false,
@@ -68,32 +66,35 @@ pub struct CreateTokenData {
         }
     };
 
-    // Create the initialize mint instruction
-    let ix = match initialize_mint(
+    let ix: Instruction = match initialize_mint(
         &spl_token::id(),
         &mint_pubkey,
-        &mint_authority_pubkey,
-        Some(&mint_authority_pubkey), // freeze_authority (optional)
+        &authority_pubkey,
+        Some(&authority_pubkey), 
         payload.decimals,
     ) {
-        Ok(instruction) => instruction,
+        Ok(i) => i,
         Err(e) => {
             return Json(CreateTokenResponse {
                 success: false,
                 data: None,
-                error: Some(format!("Failed to create initialize mint instruction: {}", e)),
+                error: Some(format!("Failed to create instruction: {}", e)),
             });
         }
     };
 
-    // Convert account metas to response format
-    let accounts = ix.accounts.iter().map(|meta| AccountInfo {
-        pubkey: meta.pubkey.to_string(),
-        is_signer: meta.is_signer,
-        is_writable: meta.is_writable,
-    }).collect();
+    
+    let accounts: Vec<AccountInfo> = ix
+        .accounts
+        .iter()
+        .map(|acc| AccountInfo {
+            pubkey: acc.pubkey.to_string(),
+            is_signer: acc.is_signer,
+            is_writable: acc.is_writable,
+        })
+        .collect();
 
-    // Encode instruction data
+ 
     let instruction_data = general_purpose::STANDARD.encode(&ix.data);
 
     Json(CreateTokenResponse {
@@ -102,6 +103,7 @@ pub struct CreateTokenData {
             program_id: ix.program_id.to_string(),
             accounts,
             instruction_data,
+            token_name: payload.token_name.clone(),
         }),
         error: None,
     })

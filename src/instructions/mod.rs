@@ -2,8 +2,5 @@ pub mod generatekeypair;
 pub mod token;
 pub mod mint;
 pub mod transfer;
-pub mod sendtokens;
-pub mod airdrop;
-pub mod balance;
 pub mod message;
 pub mod createtoken;
